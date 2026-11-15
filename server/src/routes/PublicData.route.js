@@ -1,11 +1,8 @@
-const express = require('express')
+const express = require('express');
+const public = require('../controllers/Public.controller');
 
 const PublicRoute = express.Router()
 
-PublicRoute.get('/', (req, res) => {
-    res.status(200).json({
-        message: "this is Public route"
-    })
-})
+PublicRoute.get('/', public.publicController)
 
 module.exports = PublicRoute

@@ -76,20 +76,29 @@ async function UserLogin(req, res) {
 
 }
 
-async function GetMe(req,res) {
-    const userId = req.user.id
-    const user = await userModel.findById(userId)
+async function GetMe(req, res) {
+    const userId = req.user?.id;
+    try {
+        if (!userId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
 
-    if (!user) {
+        const user = await userModel.findById(userId);
+        if (!user) {
             return res.status(404).json({ error: "User not found" });
         }
 
-    res.status(200).json({
-        message: `get me data fetched successfully`,
-        username: user.username,
-        email: user.email,
-        profile_img: user.profile_img
-    })
+        return res.status(200).json({
+            message: "get me data fetched successfully",
+            username: user.username,
+            email: user.email,
+            profile_img: user.profile_img
+        });
+    } catch (err) {
+        return res.status(500).json({
+            message: "Internal server error"
+        });
+    }
 }
 
 module.exports = {
