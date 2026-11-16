@@ -2,6 +2,8 @@ const userModel = require('../models/user.model');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+const expireTime = `${2}Day`
+
 async function UserRegister(req, res) {
     const {username, password, email, profile_img} = req.body;
 
@@ -33,7 +35,7 @@ async function UserRegister(req, res) {
         username: createUser.username
     },
     process.env.JWT_SCRET,
-    {expiresIn: "1d"})
+    {expiresIn: expireTime})
 
     res.cookie("token", token)
 
@@ -64,7 +66,7 @@ async function UserLogin(req, res) {
         username: User.username
     },
     process.env.JWT_SCRET,
-    {expiresIn:"1d"})
+    {expiresIn: expireTime})
 
     res.cookie("token", token)
 

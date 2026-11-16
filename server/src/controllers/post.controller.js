@@ -1,22 +1,42 @@
 const postModel = require('../models/post.model')
+const ImageKey = require('@imagekit/nodejs')
+const {toFile} = require('@imagekit/nodejs')
+
+const imagekit = new ImageKey({
+    privatekey: process.env.IMAGEKIT_PRIVATE_KEY
+})
 
 async function postController(req, res) {
-    const {caption, post_url } = req.body
+    const { caption } = req.body ?? {};
     const user = req.user?.id
     try{
-        if(!user){
-            return res.status(404).json({
-                message: "user not found"
+        if (!user) {
+            return res.status(401).json({
+                message: "Unauthorized"
             })
         }
-        if(!caption){
-            return res.status(404).json({
+
+        if (!caption) {
+            return res.status(400).json({
                 message: "Caption is required for post"
             })
         }
+
+        const uploadedFile = req.files?.[0]
+        if (!uploadedFile) {
+            return res.status(400).json({
+                message: "Image file is required"
+            })
+        }
+
+        const file = await imagekit.files.upload({
+            file: await toFile(uploadedFile.buffer, uploadedFile.originalname),
+            fileName: uploadedFile.originalname,
+            folder: "Tweet-clone"
+        })
         const post = await postModel.create({
-            caption: caption,
-            post_url: post_url,
+            caption,
+            post_url: file.url,
             user
         })
 
