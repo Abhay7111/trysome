@@ -1,0 +1,16 @@
+@use './shared/style/mixin.scss' as *;
+
+*{
+    padding: 0px;
+    margin: 0px;
+    box-sizing: border-box;
+    font-family: poppins;
+}
+
+html, body, #root {
+    width: 100vw;
+    height: fit-content;
+    @include bg-color(rgb(20, 20, 20));
+    @include text-color();
+    font-size: 16px;
+}
