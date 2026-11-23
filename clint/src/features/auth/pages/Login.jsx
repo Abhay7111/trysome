@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router";
-import "../styles/form.scss";
+import style from "../styles/form.module.scss";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigate } from "react-router";
 
@@ -32,10 +32,10 @@ const Login = () => {
     );
   }
   return (
-    <main>
+    <main className={style.container}>
       <h1>Login</h1>
       <form onSubmit={handelSubmit}>
-        <div className="inputs">
+        <div className={style.inputs}>
           <input
           onInput={(e) => setUsername(e.target.value)}
             type="text"
@@ -52,11 +52,11 @@ const Login = () => {
           />
         </div>
         {serverMessage && (
-          <p className="server-message" role="alert">
+          <p className={style.serverMessage} role="alert">
             {serverMessage}
           </p>
         )}
-        <div className="button">
+        <div className={style.button}>
           <button type="submit">Login</button>
         </div>
       </form>

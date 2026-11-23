@@ -1,9 +1,13 @@
-@mixin bg-color($bg-color: #252525){
+@mixin bg-color($bg-color: #1A1A19){
     background-color: $bg-color ;
 }
 
 @mixin text-color($t-color: white){
     color: $t-color;
+}
+
+@mixin border-color($border: #2C2C2C){
+    border-color: $border;
 }
 
 @mixin flex-center{

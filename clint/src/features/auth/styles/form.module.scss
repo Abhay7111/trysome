@@ -1,25 +1,25 @@
 @use '../../../shared/style/mixin.scss' as *;
 
-main{
-    width: 100vw;
-    height: 100vh;
+.container {
+    width: 100%;
+    min-height: 100vh;
     @include flex-col-center();
     gap: 20px;
 
-    h1{
+    h1 {
         font-size: 5rem;
     }
 
-    form{
+    form {
         @include flex-col-center();
         gap: 10px;
 
-        .inputs{
+        .inputs {
             @include flex-col-center();
             gap: 14px;
 
-            input{
-                width: 400px;
+            input {
+                width: min(400px, calc(100vw - 40px));
                 height: 45px;
                 border-radius: 10px;
                 outline: none;
@@ -29,9 +29,14 @@ main{
             }
         }
 
-        .button{
-            button{
-                width: 400px;
+        .serverMessage {
+            color: #ff7777;
+            font-size: 0.9rem;
+        }
+
+        .button {
+            button {
+                width: min(400px, calc(100vw - 40px));
                 padding: 10px;
                 margin-top: 10px;
                 cursor: pointer;
@@ -42,29 +47,29 @@ main{
                 color: rgb(189, 187, 187);
                 @include hover-text-transition();
                 scale: 1;
-                
-                &:hover{
+
+                &:hover {
                     color: rgb(255, 255, 255);
                     background-color: #3967ff;
                 }
 
-                &:active{
+                &:active {
                     scale: 0.9;
                 }
             }
         }
     }
 
-    p{
+    p {
         font-size: 0.8rem;
 
-        span{
-            a{
+        span {
+            a {
                 color: rgb(39, 108, 255);
                 text-decoration: none;
                 @include hover-text-transition();
 
-                &:hover{
+                &:hover {
                     color: rgb(30, 82, 196);
                 }
             }

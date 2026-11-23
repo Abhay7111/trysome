@@ -1,0 +1,49 @@
+@use './mixin.scss' as *;
+
+@mixin padding{
+    padding: 10px;
+}
+
+.main{
+    @include text-color();
+    @include bg-color();
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: space-between;
+    overflow: hidden;
+
+    .nav{
+        min-width: 5%;
+        width: 30%;
+        height: 100%;
+        @include bg-color();
+        border-right: 1px solid;
+        @include border-color();
+        @include padding();
+    }
+    
+    .public{
+        min-width: 600px;
+        width: fit-content;
+        max-width: 80%;
+        height: 100%;
+        @include bg-color();
+        @include padding();
+        overflow-y: auto;
+
+        &::-webkit-scrollbar{
+            display: none;
+        }
+    }
+    
+    .publicActivity{
+        min-width: 30%;
+        width: 40%;
+        height: 100%;
+        @include bg-color();
+        border-left: 1px solid;
+        @include border-color();
+        @include padding();
+    }
+}

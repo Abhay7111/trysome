@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Routes, Route } from 'react-router';
 import { getMe } from './features/auth/services/auth.api';
 import Login from './features/auth/pages/Login';
 import Register from './features/auth/pages/Register';
+import Public from './features/pages/Public';
 
 function Home() {
   const [profile, setProfile] = useState(null);
@@ -45,7 +46,7 @@ function AppRoutes() {
   return (
     <BrowserRouter>
         <Routes>
-            <Route path='/' element={<Home />} />
+            <Route path='/' element={<Public />} />
             <Route path='/login' element={<Login/>} />
             <Route path='/register' element={<Register/>} />
         </Routes>
