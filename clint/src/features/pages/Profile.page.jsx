@@ -1,17 +1,54 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { fetchMyPosts } from '../services/post.api';
+import { fetchProfileStats } from '../services/users.api';
 import { useSocial } from '../social/useSocial';
 import Avatar from '../components/Avatar';
+import FollowerListDialog from '../components/FollowerListDialog';
 import PostFeed from '../components/PostFeed';
 import ProfileEditor from '../components/ProfileEditor';
 import useSocialPosts from '../hooks/useSocialPosts';
 import style from './Social.module.scss';
 
 export default function ProfilePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openPostId = searchParams.get('post');
   const { profile, setProfile } = useSocial();
   const loadPosts = useCallback(() => fetchMyPosts(), []);
   const { posts, setPosts, isLoading, error } = useSocialPosts(loadPosts);
   const [isEditing, setIsEditing] = useState(false);
+  const [followList, setFollowList] = useState(null);
+  const [profileStats, setProfileStats] = useState(null);
+  const [statsError, setStatsError] = useState('');
+  const handlePostRequestHandled = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('post');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    let active = true;
+    fetchProfileStats(profile.id)
+      .then((stats) => {
+        if (active) {
+          setProfileStats(stats);
+          setStatsError('');
+        }
+      })
+      .catch((requestError) => {
+        if (active) {
+          setStatsError(
+            requestError.response?.data?.message ?? 'Unable to load profile counts.'
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile.id]);
 
   return (
     <>
@@ -31,9 +68,29 @@ export default function ProfilePage() {
           <p className={style.profilePrivacy}>
             {profile.isPrivate ? 'Private profile' : 'Public profile'}
           </p>
-          <p className={style.postCount}>
-            <strong>{posts.length}</strong> {posts.length === 1 ? 'post' : 'posts'}
-          </p>
+          <div className={style.profileStats}>
+            <div className={style.profileStat}>
+              <strong>{profileStats?.postsCount ?? posts.length}</strong>
+              <span>posts</span>
+            </div>
+            <button
+              type="button"
+              className={style.profileStat}
+              onClick={() => setFollowList('followers')}
+            >
+              <strong>{profileStats?.followersCount ?? '—'}</strong>
+              <span>followers</span>
+            </button>
+            <button
+              type="button"
+              className={style.profileStat}
+              onClick={() => setFollowList('following')}
+            >
+              <strong>{profileStats?.followingCount ?? '—'}</strong>
+              <span>following</span>
+            </button>
+          </div>
+          {statsError && <p className={style.error} role="alert">{statsError}</p>}
           <button
             type="button"
             className={style.settingsButton}
@@ -56,8 +113,23 @@ export default function ProfilePage() {
         {error && <p className={style.errorBanner} role="alert">{error}</p>}
         {isLoading
           ? <p className={style.status}>Loading posts...</p>
-          : <PostFeed posts={posts} setPosts={setPosts} />}
+          : (
+            <PostFeed
+              posts={posts}
+              setPosts={setPosts}
+              openPostId={openPostId}
+              onPostRequestHandled={handlePostRequestHandled}
+            />
+          )}
       </section>
+      {followList && (
+        <FollowerListDialog
+          userId={profile.id}
+          username={profile.username}
+          relation={followList}
+          onClose={() => setFollowList(null)}
+        />
+      )}
     </>
   );
 }

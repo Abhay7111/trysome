@@ -32,7 +32,24 @@ export async function sendMessage(conversationId, text, file) {
   return response.data;
 }
 
+export async function deleteMessage(conversationId, messageId) {
+  const response = await api.delete(
+    `/conversations/${conversationId}/messages/${messageId}`
+  );
+  return response.data;
+}
+
+export async function deleteAllMyMessages(conversationId) {
+  const response = await api.delete(`/conversations/${conversationId}/messages`);
+  return response.data;
+}
+
 export async function markConversationRead(conversationId) {
   const response = await api.patch(`/conversations/${conversationId}/read`);
+  return response.data;
+}
+
+export async function deleteConversation(conversationId) {
+  const response = await api.delete(`/conversations/${conversationId}`);
   return response.data;
 }

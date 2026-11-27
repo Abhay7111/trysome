@@ -10,6 +10,9 @@ userRoute.patch(
     authenticate,
     userController.respondToFollowRequestController
 );
+userRoute.get('/:userId/followers', authenticate, userController.listFollowersController);
+userRoute.get('/:userId/following', authenticate, userController.listFollowingController);
+userRoute.get('/:userId/stats', authenticate, userController.profileStatsController);
 userRoute.get('/:userId', authenticate, userController.getPublicProfileController);
 userRoute.post('/:userId/follow', authenticate, userController.toggleFollowController);
 userRoute.post('/:userId/block', authenticate, userController.toggleBlockController);

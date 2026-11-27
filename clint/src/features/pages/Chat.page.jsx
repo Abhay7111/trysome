@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useSocial } from '../social/useSocial';
 import {
   fetchConversations,
   fetchMessages,
   markConversationRead,
+  deleteConversation,
+  deleteAllMyMessages,
+  deleteMessage,
   sendMessage,
 } from '../services/chat.api';
 import useChatSocket from '../hooks/useChatSocket';
@@ -18,6 +22,8 @@ function appendUniqueMessage(messages, message) {
 }
 
 export default function ChatPage() {
+  const [searchParams] = useSearchParams();
+  const requestedConversationId = searchParams.get('conversation');
   const { profile } = useSocial();
   const { socket, error: connectionError } = useChatSocket();
   const [conversations, setConversations] = useState([]);
@@ -28,6 +34,9 @@ export default function ChatPage() {
   const [loadedConversationId, setLoadedConversationId] = useState(null);
   const [messageError, setMessageError] = useState({ conversationId: null, text: '' });
   const [sending, setSending] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
+  const [deletingAllMessages, setDeletingAllMessages] = useState(false);
+  const [deletingConversationId, setDeletingConversationId] = useState(null);
   const [showNewChat, setShowNewChat] = useState(false);
   const [presence, setPresence] = useState({
     conversationId: null,
@@ -63,7 +72,17 @@ export default function ChatPage() {
     let active = true;
     fetchConversations()
       .then((result) => {
-        if (active) setConversations(result.conversations ?? []);
+        if (!active) return;
+        const loadedConversations = result.conversations ?? [];
+        setConversations(loadedConversations);
+        if (
+          requestedConversationId
+          && loadedConversations.some(
+            (conversation) => conversation._id === requestedConversationId
+          )
+        ) {
+          setSelectedConversationId(requestedConversationId);
+        }
       })
       .catch((requestError) => {
         if (active) {
@@ -78,7 +97,7 @@ export default function ChatPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [requestedConversationId]);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -102,13 +121,31 @@ export default function ChatPage() {
         setListError('This chat is unavailable because you no longer follow each other.');
       }
     };
+    const handleConversationDeleted = ({ conversationId }) => {
+      setConversations((current) => current.filter(
+        (conversation) => conversation._id !== conversationId
+      ));
+      if (conversationId === selectedConversationId) {
+        socket.emit('chat:leave', conversationId);
+        setSelectedConversationId(null);
+        setMessages([]);
+        setLoadedConversationId(null);
+        setPresence({
+          conversationId: null,
+          onlineUserIds: [],
+          typingUserIds: [],
+        });
+      }
+    };
     socket.on('chat:conversation-updated', refreshOnChatUpdate);
     socket.on('chat:conversation-created', refreshOnChatUpdate);
     socket.on('chat:access-revoked', handleAccessRevoked);
+    socket.on('chat:conversation-deleted', handleConversationDeleted);
     return () => {
       socket.off('chat:conversation-updated', refreshOnChatUpdate);
       socket.off('chat:conversation-created', refreshOnChatUpdate);
       socket.off('chat:access-revoked', handleAccessRevoked);
+      socket.off('chat:conversation-deleted', handleConversationDeleted);
     };
   }, [refreshConversations, selectedConversationId, socket]);
 
@@ -192,6 +229,19 @@ export default function ChatPage() {
 
     const handleConversationUpdate = (event) => {
       if (event.conversationId === conversationId) {
+        if (event.deletedSenderId) {
+          setMessages((current) => current.filter(
+            (message) => message.sender.id !== event.deletedSenderId
+          ));
+          return;
+        }
+        if (event.deletedMessageId) {
+          setMessages((current) => current.filter(
+            (message) => message._id !== event.deletedMessageId
+          ));
+          return;
+        }
+        if (!event.message) return;
         setMessages((current) => appendUniqueMessage(current, event.message));
         markConversationRead(conversationId)
           .then(() => setConversations((current) => current.map((conversation) => (
@@ -299,6 +349,74 @@ export default function ChatPage() {
     }
   };
 
+  const handleDeleteMessage = async (messageId) => {
+    if (!selectedConversationId || deletingAllMessages || deletingMessageId !== null) return;
+
+    setDeletingMessageId(messageId);
+    setMessageError({ conversationId: null, text: '' });
+    try {
+      const result = await deleteMessage(selectedConversationId, messageId);
+      setMessages((current) => current.filter(
+        (message) => message._id !== messageId
+      ));
+      if (result.lastMessageChanged) {
+        setConversations((current) => current.map((conversation) => (
+          conversation._id === selectedConversationId
+            ? {
+              ...conversation,
+              lastMessage: result.lastMessage,
+              lastMessageAt: result.lastMessageAt,
+            }
+            : conversation
+        )));
+      }
+      return true;
+    } catch (requestError) {
+      setMessageError({
+        conversationId: selectedConversationId,
+        text: requestError.response?.data?.message ?? 'Unable to delete this message.',
+      });
+      return false;
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  const handleDeleteAllMyMessages = async () => {
+    if (
+      !selectedConversationId
+      || deletingAllMessages
+      || deletingMessageId !== null
+    ) return;
+
+    setDeletingAllMessages(true);
+    setMessageError({ conversationId: null, text: '' });
+    try {
+      const result = await deleteAllMyMessages(selectedConversationId);
+      setMessages((current) => current.filter(
+        (message) => message.sender.id !== String(profile.id)
+      ));
+      if (result.lastMessageChanged) {
+        setConversations((current) => current.map((conversation) => (
+          conversation._id === selectedConversationId
+            ? {
+              ...conversation,
+              lastMessage: result.lastMessage,
+              lastMessageAt: result.lastMessageAt,
+            }
+            : conversation
+        )));
+      }
+    } catch (requestError) {
+      setMessageError({
+        conversationId: selectedConversationId,
+        text: requestError.response?.data?.message ?? 'Unable to delete your messages.',
+      });
+    } finally {
+      setDeletingAllMessages(false);
+    }
+  };
+
   const handleConversationCreated = (conversation) => {
     setConversations((current) => [
       conversation,
@@ -314,6 +432,40 @@ export default function ChatPage() {
     });
   };
 
+  const handleDeleteConversation = async (conversationId) => {
+    if (!window.confirm(
+      'Delete this chat from your inbox? Other participants will keep their chat history.'
+    )) {
+      return;
+    }
+
+    setDeletingConversationId(conversationId);
+    setListError('');
+    try {
+      await deleteConversation(conversationId);
+      setConversations((current) => current.filter(
+        (conversation) => conversation._id !== conversationId
+      ));
+      if (selectedConversationId === conversationId) {
+        setSelectedConversationId(null);
+        setMessages([]);
+        setLoadedConversationId(null);
+        setMessageError({ conversationId: null, text: '' });
+        setPresence({
+          conversationId: null,
+          onlineUserIds: [],
+          typingUserIds: [],
+        });
+      }
+    } catch (requestError) {
+      setListError(
+        requestError.response?.data?.message ?? 'Unable to delete this chat.'
+      );
+    } finally {
+      setDeletingConversationId(null);
+    }
+  };
+
   return (
     <>
       <header className={style.header}><h1>Chats</h1></header>
@@ -326,6 +478,8 @@ export default function ChatPage() {
           loading={isLoadingConversations}
           onSelect={setSelectedConversationId}
           onNewChat={() => setShowNewChat(true)}
+          onDeleteConversation={handleDeleteConversation}
+          deletingConversationId={deletingConversationId}
         />
         {selectedConversation ? (
           <ChatWindow
@@ -335,6 +489,8 @@ export default function ChatPage() {
             typingUserIds={typingUserIds}
             loading={loadedConversationId !== selectedConversationId}
             sending={sending}
+            deletingMessageId={deletingMessageId}
+            deletingAllMessages={deletingAllMessages}
             connectionError={connectionError}
             error={visibleMessageError}
             onBack={() => setSelectedConversationId(null)}
@@ -343,6 +499,8 @@ export default function ChatPage() {
               isTyping,
             })}
             onSend={handleSend}
+            onDeleteMessage={handleDeleteMessage}
+            onDeleteAllMessages={handleDeleteAllMyMessages}
           />
         ) : (
           <section className={style.chatEmptyPane}>

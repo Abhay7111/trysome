@@ -2,6 +2,10 @@ const postModel = require('../models/post.model')
 const userModel = require('../models/user.model')
 const mongoose = require('mongoose')
 const uploadImage = require('../services/imagekit.service')
+const {
+    createNotifications,
+    notifyPostMentions
+} = require('../services/notification.service')
 
 async function postController(req, res) {
     const caption = String(req.body?.caption ?? '').trim();
@@ -37,6 +41,11 @@ async function postController(req, res) {
             visibility,
             user
         })
+        try {
+            await notifyPostMentions(post, user, '', req.app.get('io'));
+        } catch (notificationError) {
+            console.error('Unable to create post-mention notifications', notificationError);
+        }
 
         return res.status(201).json({
             message: "post created successfully",
@@ -74,11 +83,15 @@ async function feedController(req, res) {
                 isPrivate: true,
                 _id: { $ne: req.user.id }
             }).distinct('_id'),
-            userModel.findById(req.user.id).select('blockedUsers').lean(),
+            userModel.findById(req.user.id).select('blockedUsers following').lean(),
             userModel.find({ blockedUsers: req.user.id }).distinct('_id')
         ]);
+        const followedUserIds = new Set((viewer?.following ?? []).map(String));
+        const privateUsersNotFollowed = privateUserIds.filter(
+            (id) => !followedUserIds.has(String(id))
+        );
         const hiddenUserIds = [
-            ...privateUserIds,
+            ...privateUsersNotFollowed,
             ...(viewer?.blockedUsers ?? []),
             ...blockedByUserIds
         ];
@@ -151,7 +164,7 @@ async function canViewPost(post, viewerId) {
 
     const [owner, viewer] = await Promise.all([
         userModel.findById(post.user).select('isPrivate blockedUsers').lean(),
-        userModel.findById(viewerId).select('blockedUsers').lean()
+        userModel.findById(viewerId).select('blockedUsers following').lean()
     ]);
 
     if (!owner || !viewer) return false;
@@ -161,8 +174,13 @@ async function canViewPost(post, viewerId) {
     const ownerBlocksViewer = (owner.blockedUsers ?? []).some(
         (id) => String(id) === String(viewer._id)
     );
+    const viewerFollowsOwner = (viewer.following ?? []).some(
+        (id) => String(id) === String(owner._id)
+    );
 
-    return !owner.isPrivate && !viewerBlocksOwner && !ownerBlocksViewer;
+    return (!owner.isPrivate || viewerFollowsOwner)
+        && !viewerBlocksOwner
+        && !ownerBlocksViewer;
 }
 
 async function toggleLikeController(req, res) {
@@ -191,6 +209,18 @@ async function toggleLikeController(req, res) {
             update,
             { new: true }
         ).select('likes');
+        if (!alreadyLiked && String(post.user) !== String(req.user.id)) {
+            try {
+                await createNotifications([{
+                    recipient: post.user,
+                    actor: req.user.id,
+                    type: 'like',
+                    post: post._id
+                }], req.app.get('io'));
+            } catch (notificationError) {
+                console.error('Unable to create like notification', notificationError);
+            }
+        }
 
         return res.status(200).json({
             liked: !alreadyLiked,
@@ -317,8 +347,21 @@ async function updatePostController(req, res) {
             return res.status(404).json({ message: "Post not found" });
         }
 
+        const previousCaption = post.caption;
         Object.assign(post, updates);
         await post.save();
+        if (Object.prototype.hasOwnProperty.call(updates, 'caption')) {
+            try {
+                await notifyPostMentions(
+                    post,
+                    req.user.id,
+                    previousCaption,
+                    req.app.get('io')
+                );
+            } catch (notificationError) {
+                console.error('Unable to create post-mention notifications', notificationError);
+            }
+        }
         await post.populate([
             { path: 'user', select: 'username profile_img' },
             { path: 'comments.user', select: 'username profile_img' }

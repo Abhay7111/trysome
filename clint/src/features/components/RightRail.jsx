@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { fetchHomeHighlights } from '../services/explore.api';
 import Avatar from './Avatar';
+import RichText from './RichText';
 import style from '../pages/Social.module.scss';
 
 export default function RightRail() {
@@ -64,13 +65,16 @@ export default function RightRail() {
               >
                 @{post.user?.username ?? 'User'}
               </Link>
-              <Link
-                to={`/home?post=${encodeURIComponent(post._id)}`}
-                className={style.highlightPostBody}
-                aria-label={`Open post by @${post.user?.username ?? 'User'}`}
-              >
-                <p>{post.caption}</p>
-              </Link>
+              <div className={style.highlightPostBody}>
+                <p><RichText>{post.caption}</RichText></p>
+                <Link
+                  to={`/users/${post.user?._id}?post=${encodeURIComponent(post._id)}`}
+                  className={style.highlightPostOpen}
+                  aria-label={`Open post by @${post.user?.username ?? 'User'}`}
+                >
+                  Open post
+                </Link>
+              </div>
             </article>
           )) : highlights && <span>No new posts to show.</span>}
           <Link to="/explore" className={style.settingsLink}>Explore posts</Link>

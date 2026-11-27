@@ -97,8 +97,9 @@ function attachChatSocket(io) {
             try {
                 const conversation = await conversationModel.findOne({
                     _id: conversationId,
-                    participants: userId
-                }).select('participants');
+                    participants: userId,
+                    deletedFor: { $ne: userId }
+                }).select('participants deletedFor');
                 if (
                     !conversation
                     || !await areParticipantsEligibleById(conversation.participants)

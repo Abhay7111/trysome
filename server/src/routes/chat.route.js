@@ -43,6 +43,21 @@ chatRoute.post(
     handleUploadError,
     chatController.createMessageController
 );
+chatRoute.delete(
+    '/conversations/:conversationId/messages',
+    authenticate,
+    chatController.deleteAllMyMessagesController
+);
+chatRoute.delete(
+    '/conversations/:conversationId/messages/:messageId',
+    authenticate,
+    chatController.deleteMessageController
+);
+chatRoute.delete(
+    '/conversations/:conversationId',
+    authenticate,
+    chatController.deleteConversationController
+);
 chatRoute.patch(
     '/conversations/:conversationId/read',
     authenticate,

@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { searchExplore } from '../services/explore.api';
 import PostFeed from '../components/PostFeed';
 import UserSearchResults from '../components/UserSearchResults';
 import style from './Social.module.scss';
+
+const searchTypes = [
+  { value: 'posts', label: 'Posts', description: 'Find conversations and updates' },
+  { value: 'users', label: 'Users', description: 'Discover people to follow' },
+  { value: 'tags', label: 'Tags', description: 'Browse topics by hashtag' },
+];
 
 export default function ExplorePage() {
   const [searchParams] = useSearchParams();
@@ -18,6 +24,58 @@ export default function ExplorePage() {
   const [searchedType, setSearchedType] = useState('');
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const typePickerRef = useRef(null);
+  const typeMenuRef = useRef(null);
+  const typeTriggerRef = useRef(null);
+  const selectedType = searchTypes.find((option) => option.value === type);
+
+  useEffect(() => {
+    if (!typeMenuOpen) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!typePickerRef.current?.contains(event.target)) {
+        setTypeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, [typeMenuOpen]);
+
+  const handleTypePickerKeyDown = (event) => {
+    if (event.key === 'Escape' && typeMenuOpen) {
+      event.preventDefault();
+      setTypeMenuOpen(false);
+      typeTriggerRef.current?.focus();
+      return;
+    }
+
+    if (
+      !typeMenuOpen
+      || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)
+    ) {
+      return;
+    }
+
+    const options = Array.from(
+      typeMenuRef.current?.querySelectorAll('[role="menuitemradio"]') ?? []
+    );
+    if (!options.length) return;
+
+    const currentIndex = options.indexOf(document.activeElement);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? options.length - 1
+        : currentIndex === -1
+          ? event.key === 'ArrowDown' ? 0 : options.length - 1
+          : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + options.length)
+            % options.length;
+
+    event.preventDefault();
+    options[nextIndex].focus();
+  };
 
   useEffect(() => {
     const requestedType = searchParams.get('type');
@@ -95,14 +153,56 @@ export default function ExplorePage() {
       <header className={style.header}><h1>Explore</h1></header>
       <section className={style.explorePage}>
         <form className={style.exploreSearch} onSubmit={handleSearch}>
-          <label>
-            Search for
-            <select value={type} onChange={(event) => setType(event.target.value)}>
-              <option value="posts">Posts</option>
-              <option value="users">Users</option>
-              <option value="tags">Tags</option>
-            </select>
-          </label>
+          <div
+            ref={typePickerRef}
+            className={style.exploreTypePicker}
+            onKeyDown={handleTypePickerKeyDown}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setTypeMenuOpen(false);
+              }
+            }}
+          >
+            <span className={style.exploreTypeLabel}>Search for</span>
+            <button
+              ref={typeTriggerRef}
+              type="button"
+              className={style.exploreTypeTrigger}
+              aria-label="Search for"
+              aria-haspopup="menu"
+              aria-expanded={typeMenuOpen}
+              onClick={() => setTypeMenuOpen((open) => !open)}
+            >
+              {selectedType.label}
+              <span className={style.exploreTypeChevron} aria-hidden="true" />
+            </button>
+            {typeMenuOpen && (
+              <div ref={typeMenuRef} className={style.exploreTypeMenu} role="menu">
+                {searchTypes.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={type === option.value}
+                    className={`${style.exploreTypeOption} ${
+                      type === option.value ? style.exploreTypeOptionSelected : ''
+                    }`}
+                    onClick={() => {
+                      setType(option.value);
+                      setTypeMenuOpen(false);
+                      typeTriggerRef.current?.focus();
+                    }}
+                  >
+                    <span className={style.exploreTypeOptionText}>
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                    <span className={style.exploreTypeCheck} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <input
             type="search"
             aria-label={`Search ${type}`}

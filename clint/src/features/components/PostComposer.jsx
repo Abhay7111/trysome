@@ -75,8 +75,9 @@ export default function PostComposer({ onPostCreated, inputRef }) {
           <label className={style.visibilityPicker}>
             <span>Who can see this?</span>
             <select
+              aria-label="Who can see this?"
               value={visibility}
-              onChange={(event) => setVisibility(event.target.value)}
+              onChange={(event) => setVisibility(event.currentTarget.value)}
             >
               <option value="public">Public</option>
               <option value="private">Only me</option>

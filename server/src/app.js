@@ -10,6 +10,7 @@ const PublicRoute = require('./routes/PublicData.route')
 const PostRoute = require('./routes/post.route')
 const UserRoute = require('./routes/user.route')
 const ChatRoute = require('./routes/chat.route')
+const NotificationRoute = require('./routes/notification.route')
 
 app.use(express.json())
 app.use(cookieParser())
@@ -22,6 +23,7 @@ app.use('/api', PublicRoute)
 app.use('/api/post', PostRoute)
 app.use('/api/users', UserRoute)
 app.use('/api/chat', ChatRoute)
+app.use('/api/notifications', NotificationRoute)
 
 app.get('/', (req, res) => {
     res.send("server is running")

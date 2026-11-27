@@ -3,6 +3,7 @@ const chatMessageModel = require('../models/chatMessage.model');
 const conversationModel = require('../models/conversation.model');
 const userModel = require('../models/user.model');
 const uploadImage = require('../services/imagekit.service');
+const { createNotifications } = require('../services/notification.service');
 const {
     areParticipantsEligibleById,
     filterEligibleConversations
@@ -83,7 +84,11 @@ async function createConversationController(req, res) {
 
         if (!isGroup) {
             const directKey = [...participants].sort().join(':');
-            const existing = await conversationModel.findOne({ directKey })
+            const existing = await conversationModel.findOneAndUpdate(
+                { directKey },
+                { $pull: { deletedFor: req.user.id } },
+                { new: true }
+            )
                 .populate('participants', 'username profile_img')
                 .populate({
                     path: 'lastMessage',
@@ -122,7 +127,11 @@ async function createConversationController(req, res) {
         if (error.code === 11000 && uniqueIds.length === 1) {
             try {
                 const directKey = [String(req.user.id), ...uniqueIds].sort().join(':');
-                const existing = await conversationModel.findOne({ directKey })
+                const existing = await conversationModel.findOneAndUpdate(
+                    { directKey },
+                    { $pull: { deletedFor: req.user.id } },
+                    { new: true }
+                )
                     .populate('participants', 'username profile_img');
                 if (existing) {
                     return res.status(200).json({
@@ -140,7 +149,8 @@ async function createConversationController(req, res) {
 async function listConversationsController(req, res) {
     try {
         const foundConversations = await conversationModel.find({
-            participants: req.user.id
+            participants: req.user.id,
+            deletedFor: { $ne: req.user.id }
         })
             .populate('participants', 'username profile_img')
             .populate({
@@ -190,10 +200,13 @@ async function listMessagesController(req, res) {
 
     try {
         const conversation = await conversationModel.findById(conversationId)
-            .select('participants');
+            .select('participants deletedFor');
         if (
             !conversation
             || !isConversationParticipant(conversation, req.user.id)
+            || (conversation.deletedFor ?? []).some(
+                (userId) => String(userId) === String(req.user.id)
+            )
             || !await areParticipantsEligibleById(conversation.participants)
         ) {
             return res.status(404).json({ message: 'Conversation not found' });
@@ -226,10 +239,13 @@ async function createMessageController(req, res) {
 
     try {
         const conversation = await conversationModel.findById(conversationId)
-            .select('participants');
+            .select('participants deletedFor');
         if (
             !conversation
             || !isConversationParticipant(conversation, req.user.id)
+            || (conversation.deletedFor ?? []).some(
+                (userId) => String(userId) === String(req.user.id)
+            )
             || !await areParticipantsEligibleById(conversation.participants)
         ) {
             return res.status(404).json({ message: 'Conversation not found' });
@@ -262,7 +278,13 @@ async function createMessageController(req, res) {
         });
         await conversationModel.updateOne(
             { _id: conversationId },
-            { $set: { lastMessage: created._id, lastMessageAt: created.createdAt } }
+            {
+                $set: {
+                    lastMessage: created._id,
+                    lastMessageAt: created.createdAt,
+                    deletedFor: []
+                }
+            }
         );
         const message = await chatMessageModel.findById(created._id)
             .populate('sender', 'username profile_img');
@@ -279,10 +301,198 @@ async function createMessageController(req, res) {
                 }
             }
         }
+        try {
+            await createNotifications(
+                conversation.participants
+                    .filter((participantId) => String(participantId) !== String(req.user.id))
+                    .map((participantId) => ({
+                        recipient: participantId,
+                        actor: req.user.id,
+                        type: 'message',
+                        conversation: conversation._id
+                    })),
+                io
+            );
+        } catch (notificationError) {
+            console.error('Unable to create message notifications', notificationError);
+        }
 
         return res.status(201).json({ message: serialized });
     } catch (error) {
         return res.status(500).json({ message: 'Unable to send message' });
+    }
+}
+
+async function deleteMessageController(req, res) {
+    const { conversationId, messageId } = req.params;
+    if (
+        !mongoose.Types.ObjectId.isValid(conversationId)
+        || !mongoose.Types.ObjectId.isValid(messageId)
+    ) {
+        return res.status(400).json({ message: 'Invalid conversation or message id' });
+    }
+
+    try {
+        const conversation = await conversationModel.findById(conversationId)
+            .select('participants deletedFor createdAt lastMessage');
+        if (
+            !conversation
+            || !isConversationParticipant(conversation, req.user.id)
+            || (conversation.deletedFor ?? []).some(
+                (userId) => String(userId) === String(req.user.id)
+            )
+            || !await areParticipantsEligibleById(conversation.participants)
+        ) {
+            return res.status(404).json({ message: 'Conversation not found' });
+        }
+
+        const message = await chatMessageModel.findOne({
+            _id: messageId,
+            conversation: conversationId
+        }).select('sender');
+        if (!message) {
+            return res.status(404).json({ message: 'Message not found' });
+        }
+        if (String(message.sender) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'You can only delete your own messages' });
+        }
+
+        const deletion = await chatMessageModel.deleteOne({
+            _id: messageId,
+            conversation: conversationId,
+            sender: req.user.id
+        });
+        if (!deletion.deletedCount) {
+            return res.status(404).json({ message: 'Message not found' });
+        }
+
+        let lastMessage;
+        let lastMessageAt = conversation.lastMessageAt;
+        const lastMessageChanged = (
+            String(conversation.lastMessage ?? '') === String(messageId)
+        );
+        if (lastMessageChanged) {
+            lastMessage = await chatMessageModel.findOne({ conversation: conversationId })
+                .populate('sender', 'username profile_img')
+                .sort({ createdAt: -1 });
+            lastMessageAt = lastMessage?.createdAt ?? conversation.createdAt;
+            await conversationModel.updateOne(
+                { _id: conversationId, lastMessage: messageId },
+                {
+                    $set: {
+                        lastMessage: lastMessage?._id ?? null,
+                        lastMessageAt
+                    }
+                }
+            );
+        }
+
+        const io = req.app.get('io');
+        const event = {
+            conversationId: String(conversationId),
+            deletedMessageId: String(messageId),
+            lastMessage: lastMessage ? serializeMessage(lastMessage) : null,
+            lastMessageAt,
+            lastMessageChanged
+        };
+        if (io) {
+            for (const participantId of conversation.participants) {
+                io.to(`user:${participantId}`).emit('chat:conversation-updated', event);
+            }
+        }
+
+        return res.status(200).json({
+            deleted: true,
+            messageId: String(messageId),
+            lastMessage: lastMessage ? serializeMessage(lastMessage) : null,
+            lastMessageAt,
+            lastMessageChanged
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Unable to delete message' });
+    }
+}
+
+async function deleteAllMyMessagesController(req, res) {
+    const { conversationId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+        return res.status(400).json({ message: 'Invalid conversation id' });
+    }
+
+    try {
+        const conversation = await conversationModel.findById(conversationId)
+            .select('participants deletedFor createdAt lastMessage');
+        if (
+            !conversation
+            || !isConversationParticipant(conversation, req.user.id)
+            || (conversation.deletedFor ?? []).some(
+                (userId) => String(userId) === String(req.user.id)
+            )
+            || !await areParticipantsEligibleById(conversation.participants)
+        ) {
+            return res.status(404).json({ message: 'Conversation not found' });
+        }
+
+        const lastMessageIsMine = conversation.lastMessage
+            ? await chatMessageModel.exists({
+                _id: conversation.lastMessage,
+                conversation: conversationId,
+                sender: req.user.id
+            })
+            : false;
+        const deletion = await chatMessageModel.deleteMany({
+            conversation: conversationId,
+            sender: req.user.id
+        });
+        if (!deletion.deletedCount) {
+            return res.status(200).json({
+                deletedCount: 0,
+                lastMessage: null,
+                lastMessageAt: conversation.lastMessageAt,
+                lastMessageChanged: false
+            });
+        }
+
+        let lastMessage;
+        let lastMessageAt = conversation.lastMessageAt;
+        if (lastMessageIsMine) {
+            lastMessage = await chatMessageModel.findOne({ conversation: conversationId })
+                .populate('sender', 'username profile_img')
+                .sort({ createdAt: -1 });
+            lastMessageAt = lastMessage?.createdAt ?? conversation.createdAt;
+            await conversationModel.updateOne(
+                { _id: conversationId, lastMessage: conversation.lastMessage },
+                {
+                    $set: {
+                        lastMessage: lastMessage?._id ?? null,
+                        lastMessageAt
+                    }
+                }
+            );
+        }
+
+        const io = req.app.get('io');
+        const event = {
+            conversationId: String(conversationId),
+            deletedSenderId: String(req.user.id),
+            lastMessage: lastMessage ? serializeMessage(lastMessage) : null,
+            lastMessageAt,
+            lastMessageChanged: Boolean(lastMessageIsMine)
+        };
+        if (io) {
+            for (const participantId of conversation.participants) {
+                io.to(`user:${participantId}`).emit('chat:conversation-updated', event);
+            }
+        }
+
+        return res.status(200).json({
+            deletedCount: deletion.deletedCount,
+            lastMessage: event.lastMessage,
+            lastMessageAt,
+            lastMessageChanged: event.lastMessageChanged
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Unable to delete your messages' });
     }
 }
 
@@ -294,10 +504,13 @@ async function markConversationReadController(req, res) {
 
     try {
         const conversation = await conversationModel.findById(conversationId)
-            .select('participants');
+            .select('participants deletedFor');
         if (
             !conversation
             || !isConversationParticipant(conversation, req.user.id)
+            || (conversation.deletedFor ?? []).some(
+                (userId) => String(userId) === String(req.user.id)
+            )
             || !await areParticipantsEligibleById(conversation.participants)
         ) {
             return res.status(404).json({ message: 'Conversation not found' });
@@ -331,10 +544,38 @@ async function markConversationReadController(req, res) {
     }
 }
 
+async function deleteConversationController(req, res) {
+    const { conversationId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+        return res.status(400).json({ message: 'Invalid conversation id' });
+    }
+
+    try {
+        const conversation = await conversationModel.findOneAndUpdate(
+            { _id: conversationId, participants: req.user.id },
+            { $addToSet: { deletedFor: req.user.id } },
+            { new: true }
+        ).select('_id');
+        if (!conversation) {
+            return res.status(404).json({ message: 'Conversation not found' });
+        }
+
+        req.app.get('io')?.to(`user:${req.user.id}`).emit('chat:conversation-deleted', {
+            conversationId: String(conversation._id)
+        });
+        return res.status(200).json({ deleted: true });
+    } catch (error) {
+        return res.status(500).json({ message: 'Unable to delete conversation' });
+    }
+}
+
 module.exports = {
     createConversationController,
     listConversationsController,
     listMessagesController,
     createMessageController,
-    markConversationReadController
+    deleteMessageController,
+    deleteAllMyMessagesController,
+    markConversationReadController,
+    deleteConversationController
 };

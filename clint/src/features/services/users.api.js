@@ -11,6 +11,21 @@ export async function fetchPublicUserProfile(userId) {
   return response.data;
 }
 
+export async function fetchFollowers(userId) {
+  const response = await api.get(`/${userId}/followers`);
+  return response.data;
+}
+
+export async function fetchFollowing(userId) {
+  const response = await api.get(`/${userId}/following`);
+  return response.data;
+}
+
+export async function fetchProfileStats(userId) {
+  const response = await api.get(`/${userId}/stats`);
+  return response.data;
+}
+
 export async function toggleFollow(userId) {
   const response = await api.post(`/${userId}/follow`);
   return response.data;

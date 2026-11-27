@@ -6,6 +6,10 @@ const conversationSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         required: true
     }],
+    deletedFor: [{
+        ref: 'user',
+        type: mongoose.Schema.Types.ObjectId
+    }],
     isGroup: {
         type: Boolean,
         default: false

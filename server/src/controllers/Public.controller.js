@@ -85,9 +85,13 @@ async function searchController(req, res) {
         }
 
         const privateUserIds = await userModel.find({ isPrivate: true }).distinct('_id');
+        const followedUserIds = new Set((viewer.following ?? []).map(String));
+        const privateUsersNotFollowed = privateUserIds.filter(
+            (id) => !followedUserIds.has(String(id))
+        );
         const posts = await postModel.find({
             caption: matchingText,
-            user: { $nin: [...hiddenUserIds, ...privateUserIds] },
+            user: { $nin: [...hiddenUserIds, ...privateUsersNotFollowed] },
             $or: [
                 { visibility: 'public' },
                 { visibility: { $exists: false } }
@@ -107,7 +111,7 @@ async function searchController(req, res) {
 async function highlightsController(req, res) {
     try {
         const viewer = await userModel.findById(req.user.id)
-            .select('blockedUsers')
+            .select('blockedUsers following')
             .lean();
         if (!viewer) {
             return res.status(404).json({ message: 'User not found' });
@@ -117,10 +121,14 @@ async function highlightsController(req, res) {
             userModel.find({ blockedUsers: req.user.id }).distinct('_id'),
             userModel.find({ isPrivate: true }).distinct('_id')
         ]);
+        const followedUserIds = new Set((viewer.following ?? []).map(String));
+        const privateUsersNotFollowed = privateUsers.filter(
+            (id) => !followedUserIds.has(String(id))
+        );
         const hiddenUserIds = [
             ...(viewer.blockedUsers ?? []),
             ...blockedViewer,
-            ...privateUsers,
+            ...privateUsersNotFollowed,
             req.user.id
         ];
         const [users, posts] = await Promise.all([

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const userModel = require('../models/user.model');
 const postModel = require('../models/post.model');
 const { formatPost } = require('./post.controller');
+const { createNotifications } = require('../services/notification.service');
 
 async function getPublicProfileController(req, res) {
     const requestedUser = String(req.params.userId ?? '');
@@ -58,6 +59,11 @@ async function getPublicProfileController(req, res) {
                 .sort({ createdAt: -1 });
         }
 
+        const [followersCount, postsCount] = await Promise.all([
+            userModel.countDocuments({ following: target._id }),
+            postModel.countDocuments({ user: target._id })
+        ]);
+
         return res.status(200).json({
             profile: {
                 id: String(target._id),
@@ -65,7 +71,10 @@ async function getPublicProfileController(req, res) {
                 profile_img: target.profile_img,
                 banner_img: target.banner_img,
                 bio: target.bio,
-                isPrivate: target.isPrivate
+                isPrivate: target.isPrivate,
+                postsCount,
+                followersCount,
+                followingCount: (target.following ?? []).length
             },
             isFollowing,
             isFollowedBy: (target.following ?? []).some(
@@ -79,6 +88,174 @@ async function getPublicProfileController(req, res) {
         });
     } catch (error) {
         return res.status(500).json({ message: 'Unable to load public profile' });
+    }
+}
+
+async function listFollowersController(req, res) {
+    const requestedUser = String(req.params.userId ?? '');
+    if (!requestedUser || requestedUser.length > 80) {
+        return res.status(400).json({ message: 'Invalid user id or username' });
+    }
+
+    try {
+        const findTarget = async () => {
+            if (mongoose.Types.ObjectId.isValid(requestedUser)) {
+                const byId = await userModel.findById(
+                    new mongoose.Types.ObjectId(requestedUser)
+                ).select('username isPrivate blockedUsers');
+                if (byId) return byId;
+            }
+            return userModel.findOne({ username: requestedUser })
+                .select('username isPrivate blockedUsers');
+        };
+        const [target, viewer] = await Promise.all([
+            findTarget(),
+            userModel.findById(req.user.id).select('_id following blockedUsers')
+        ]);
+        if (!target || !viewer) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const isOwnProfile = String(target._id) === String(viewer._id);
+        const targetBlocksViewer = (target.blockedUsers ?? []).some(
+            (id) => String(id) === String(viewer._id)
+        );
+        const viewerBlocksTarget = (viewer.blockedUsers ?? []).some(
+            (id) => String(id) === String(target._id)
+        );
+        if (targetBlocksViewer || viewerBlocksTarget) {
+            return res.status(404).json({ message: 'Profile not found' });
+        }
+
+        const isFollowing = (viewer.following ?? []).some(
+            (id) => String(id) === String(target._id)
+        );
+        if (target.isPrivate && !isOwnProfile && !isFollowing) {
+            return res.status(403).json({ message: 'Follow this account to view its followers' });
+        }
+
+        const followers = await userModel.find({
+            following: target._id,
+            _id: {
+                $nin: [...(target.blockedUsers ?? []), ...(viewer.blockedUsers ?? [])]
+            },
+            blockedUsers: { $nin: [target._id, viewer._id] }
+        }).select('username profile_img bio');
+
+        return res.status(200).json({
+            followers: followers.map((follower) => ({
+                id: String(follower._id),
+                username: follower.username,
+                profile_img: follower.profile_img,
+                bio: follower.bio ?? ''
+            }))
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Unable to load followers' });
+    }
+}
+
+async function listFollowingController(req, res) {
+    const requestedUser = String(req.params.userId ?? '');
+    if (!requestedUser || requestedUser.length > 80) {
+        return res.status(400).json({ message: 'Invalid user id or username' });
+    }
+
+    try {
+        const target = mongoose.Types.ObjectId.isValid(requestedUser)
+            ? await userModel.findById(requestedUser)
+                .select('isPrivate blockedUsers following')
+            : await userModel.findOne({ username: requestedUser })
+                .select('isPrivate blockedUsers following');
+        const viewer = await userModel.findById(req.user.id)
+            .select('_id following blockedUsers');
+        if (!target || !viewer) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const isOwnProfile = String(target._id) === String(viewer._id);
+        const targetBlocksViewer = (target.blockedUsers ?? []).some(
+            (id) => String(id) === String(viewer._id)
+        );
+        const viewerBlocksTarget = (viewer.blockedUsers ?? []).some(
+            (id) => String(id) === String(target._id)
+        );
+        const isFollowing = (viewer.following ?? []).some(
+            (id) => String(id) === String(target._id)
+        );
+        if (targetBlocksViewer || viewerBlocksTarget) {
+            return res.status(404).json({ message: 'Profile not found' });
+        }
+        if (target.isPrivate && !isOwnProfile && !isFollowing) {
+            return res.status(403).json({ message: 'Follow this account to view its following list' });
+        }
+
+        const users = await userModel.find({
+            _id: {
+                $in: target.following ?? [],
+                $nin: [...(target.blockedUsers ?? []), ...(viewer.blockedUsers ?? [])]
+            },
+            blockedUsers: { $nin: [target._id, viewer._id] }
+        }).select('username profile_img bio');
+        return res.status(200).json({
+            users: users.map((user) => ({
+                id: String(user._id),
+                username: user.username,
+                profile_img: user.profile_img,
+                bio: user.bio ?? ''
+            }))
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Unable to load following list' });
+    }
+}
+
+async function profileStatsController(req, res) {
+    const requestedUser = String(req.params.userId ?? '');
+    if (!requestedUser || requestedUser.length > 80) {
+        return res.status(400).json({ message: 'Invalid user id or username' });
+    }
+
+    try {
+        const target = mongoose.Types.ObjectId.isValid(requestedUser)
+            ? await userModel.findById(requestedUser)
+                .select('isPrivate blockedUsers following')
+            : await userModel.findOne({ username: requestedUser })
+                .select('isPrivate blockedUsers following');
+        const viewer = await userModel.findById(req.user.id)
+            .select('_id following blockedUsers');
+        if (!target || !viewer) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const isOwnProfile = String(target._id) === String(viewer._id);
+        const isFollowing = (viewer.following ?? []).some(
+            (id) => String(id) === String(target._id)
+        );
+        const targetBlocksViewer = (target.blockedUsers ?? []).some(
+            (id) => String(id) === String(viewer._id)
+        );
+        const viewerBlocksTarget = (viewer.blockedUsers ?? []).some(
+            (id) => String(id) === String(target._id)
+        );
+        if (targetBlocksViewer || viewerBlocksTarget) {
+            return res.status(404).json({ message: 'Profile not found' });
+        }
+        if (target.isPrivate && !isOwnProfile && !isFollowing) {
+            return res.status(403).json({ message: 'Follow this account to view its profile counts' });
+        }
+
+        const [followersCount, postsCount] = await Promise.all([
+            userModel.countDocuments({ following: target._id }),
+            postModel.countDocuments({ user: target._id })
+        ]);
+        return res.status(200).json({
+            followersCount,
+            followingCount: (target.following ?? []).length,
+            postsCount
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Unable to load profile counts' });
     }
 }
 
@@ -150,6 +327,15 @@ async function toggleFollowController(req, res) {
             { _id: req.user.id },
             { $addToSet: { following: targetId } }
         );
+        try {
+            await createNotifications([{
+                recipient: targetId,
+                actor: req.user.id,
+                type: 'follow'
+            }], req.app.get('io'));
+        } catch (notificationError) {
+            console.error('Unable to create follow notification', notificationError);
+        }
         return res.status(200).json({ following: true, requested: false });
     } catch (error) {
         return res.status(500).json({ message: 'Unable to update follow status' });
@@ -159,17 +345,65 @@ async function toggleFollowController(req, res) {
 async function listFollowRequestsController(req, res) {
     try {
         const viewer = await userModel.findById(req.user.id)
-            .select('followRequests')
-            .populate('followRequests', 'username profile_img');
+            .select('followRequests');
         if (!viewer) {
             return res.status(404).json({ message: 'User not found' });
         }
+
+        const requesterIds = (viewer.followRequests ?? []).filter(Boolean);
+        const [requesters, followerCounts] = await Promise.all([
+            userModel.aggregate([
+                { $match: { _id: { $in: requesterIds } } },
+                {
+                    $project: {
+                        username: 1,
+                        profile_img: 1,
+                        bio: 1,
+                        followingCount: {
+                            $size: { $ifNull: ['$following', []] }
+                        }
+                    }
+                }
+            ]),
+            requesterIds.length
+                ? userModel.aggregate([
+                    { $match: { following: { $in: requesterIds } } },
+                    { $unwind: '$following' },
+                    { $match: { following: { $in: requesterIds } } },
+                    {
+                        $group: {
+                            _id: { requester: '$following', follower: '$_id' }
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: '$_id.requester',
+                            followersCount: { $sum: 1 }
+                        }
+                    }
+                ])
+                : []
+        ]);
+        const requesterById = new Map(
+            requesters.map((user) => [String(user._id), user])
+        );
+        const followerCountById = new Map(
+            followerCounts.map((entry) => [String(entry._id), entry.followersCount])
+        );
+
         return res.status(200).json({
-            requests: (viewer.followRequests ?? []).filter(Boolean).map((user) => ({
-                id: String(user._id),
-                username: user.username,
-                profile_img: user.profile_img
-            }))
+            requests: requesterIds.flatMap((id) => {
+                const user = requesterById.get(String(id));
+                if (!user) return [];
+                return [{
+                    id: String(user._id),
+                    username: user.username,
+                    profile_img: user.profile_img,
+                    bio: user.bio ?? '',
+                    followersCount: followerCountById.get(String(id)) ?? 0,
+                    followingCount: user.followingCount ?? 0
+                }];
+            })
         });
     } catch (error) {
         return res.status(500).json({ message: 'Unable to load follow requests' });
@@ -222,6 +456,17 @@ async function respondToFollowRequestController(req, res) {
             ));
         }
         await Promise.all(updates);
+        if (accept) {
+            try {
+                await createNotifications([{
+                    recipient: req.user.id,
+                    actor: requesterId,
+                    type: 'follow'
+                }], req.app.get('io'));
+            } catch (notificationError) {
+                console.error('Unable to create accepted-follow notification', notificationError);
+            }
+        }
         return res.status(200).json({ accepted: accept });
     } catch (error) {
         return res.status(500).json({ message: 'Unable to respond to follow request' });
@@ -290,6 +535,9 @@ async function toggleBlockController(req, res) {
 
 module.exports = {
     getPublicProfileController,
+    listFollowersController,
+    listFollowingController,
+    profileStatsController,
     toggleFollowController,
     listFollowRequestsController,
     respondToFollowRequestController,

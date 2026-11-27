@@ -133,22 +133,44 @@ export default function SettingsPage() {
             : followRequests.length
               ? followRequests.map((request) => (
                 <div className={style.followRequest} key={request.id}>
-                  <Avatar user={request} />
-                  <strong>@{request.username}</strong>
-                  <button
-                    type="button"
-                    disabled={respondingIds.has(request.id)}
-                    onClick={() => handleFollowRequest(request.id, false)}
+                  <Link
+                    className={style.followRequestProfile}
+                    to={`/users/${request.id}`}
                   >
-                    Decline
-                  </button>
-                  <button
-                    type="button"
-                    disabled={respondingIds.has(request.id)}
-                    onClick={() => handleFollowRequest(request.id, true)}
-                  >
-                    Accept
-                  </button>
+                    <Avatar user={request} />
+                    <span className={style.followRequestDetails}>
+                      <strong>@{request.username}</strong>
+                      <small className={style.followRequestBio}>
+                        {request.bio || 'No bio yet.'}
+                      </small>
+                      <span className={style.followRequestCounts}>
+                        <span>
+                          <strong>{request.followersCount ?? 0}</strong> followers
+                        </span>
+                        <span>
+                          <strong>{request.followingCount ?? 0}</strong> following
+                        </span>
+                      </span>
+                    </span>
+                  </Link>
+                  <div className={style.followRequestActions}>
+                    <button
+                      type="button"
+                      className={style.acceptFollowRequest}
+                      disabled={respondingIds.has(request.id)}
+                      onClick={() => handleFollowRequest(request.id, true)}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      className={style.declineFollowRequest}
+                      disabled={respondingIds.has(request.id)}
+                      onClick={() => handleFollowRequest(request.id, false)}
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
               ))
               : <p>No pending follow requests.</p>}

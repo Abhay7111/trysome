@@ -1,4 +1,4 @@
-import { RiAddLine } from '@remixicon/react';
+import { RiAddLine, RiDeleteBinLine } from '@remixicon/react';
 import Avatar from './Avatar';
 import style from '../pages/Social.module.scss';
 
@@ -22,6 +22,8 @@ export default function ChatInbox({
   loading,
   onSelect,
   onNewChat,
+  onDeleteConversation,
+  deletingConversationId,
 }) {
   return (
     <aside className={style.chatInbox}>
@@ -43,25 +45,40 @@ export default function ChatInbox({
           const title = getConversationTitle(conversation, currentUserId);
           const isSelected = conversation._id === selectedConversationId;
           return (
-            <button
-              type="button"
+            <div
               className={`${style.conversationItem} ${isSelected ? style.activeConversation : ''}`}
               key={conversation._id}
-              onClick={() => onSelect(conversation._id)}
             >
-              {conversation.isGroup
-                ? <span className={style.groupAvatar}>{conversation.groupName?.charAt(0) || 'G'}</span>
-                : <Avatar user={otherParticipant} />}
-              <span className={style.conversationInfo}>
-                <strong>{title}</strong>
-                <span>{getLastMessageText(conversation.lastMessage)}</span>
-              </span>
-              {conversation.unreadCount > 0 && (
-                <span className={style.unreadBadge}>
-                  {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+              <button
+                type="button"
+                className={style.conversationSelect}
+                aria-current={isSelected ? 'true' : undefined}
+                onClick={() => onSelect(conversation._id)}
+              >
+                {conversation.isGroup
+                  ? <span className={style.groupAvatar}>{conversation.groupName?.charAt(0) || 'G'}</span>
+                  : <Avatar user={otherParticipant} />}
+                <span className={style.conversationInfo}>
+                  <strong>{title}</strong>
+                  <span>{getLastMessageText(conversation.lastMessage)}</span>
                 </span>
-              )}
-            </button>
+                {conversation.unreadCount > 0 && (
+                  <span className={style.unreadBadge}>
+                    {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className={style.conversationDelete}
+                aria-label={`Delete chat with ${title}`}
+                title="Delete chat from your inbox"
+                disabled={deletingConversationId !== null}
+                onClick={() => onDeleteConversation(conversation._id)}
+              >
+                <RiDeleteBinLine aria-hidden="true" />
+              </button>
+            </div>
           );
         })}
       </div>

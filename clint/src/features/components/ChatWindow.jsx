@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   RiArrowLeftLine,
   RiAttachmentLine,
+  RiDeleteBinLine,
   RiFileTextLine,
   RiSendPlaneFill,
 } from '@remixicon/react';
@@ -32,11 +33,15 @@ export default function ChatWindow({
   typingUserIds,
   loading,
   sending,
+  deletingMessageId,
+  deletingAllMessages,
   connectionError,
   error,
   onBack,
   onTyping,
   onSend,
+  onDeleteMessage,
+  onDeleteAllMessages,
 }) {
   const { profile } = useSocial();
   const [text, setText] = useState('');
@@ -126,11 +131,30 @@ export default function ChatWindow({
           : <Avatar user={conversation.participants.find(
             (participant) => participant.id !== String(profile.id)
           )} />}
-        <div>
-          <h2>{title}</h2>
-          {conversation.isGroup
-            ? <span>{conversation.participants.length} members</span>
-            : <span>{onlineUserIds.includes(otherParticipant?.id) ? 'Active now' : 'Offline'}</span>}
+        <div className={style.chatWindowIdentity}>
+          <div className={style.chatWindowIdentityText}>
+            <h2>{title}</h2>
+            <span>
+              {conversation.isGroup
+                ? `${conversation.participants.length} members`
+                : onlineUserIds.includes(otherParticipant?.id) ? 'Active now' : 'Offline'}
+            </span>
+          </div>
+          <button
+            type="button"
+            className={style.chatDeleteAllButton}
+            aria-label="Delete all messages you sent in this chat"
+            title="Delete all messages you sent in this chat"
+            disabled={
+              loading
+              || deletingAllMessages
+              || deletingMessageId !== null
+            }
+            onClick={onDeleteAllMessages}
+          >
+            <RiDeleteBinLine aria-hidden="true" />
+            <span>{deletingAllMessages ? 'Deleting...' : 'Delete my messages'}</span>
+          </button>
         </div>
       </header>
       <div className={style.chatMessages}>
@@ -172,6 +196,21 @@ export default function ChatWindow({
                     })}
                   </time>
                   {mine && <span>{getReadLabel(message, conversation, profile.id)}</span>}
+                  {mine && (
+                    <button
+                      type="button"
+                      className={style.messageDeleteButton}
+                      aria-label="Delete message for everyone"
+                      title="Delete message for everyone"
+                      disabled={
+                        deletingAllMessages
+                        || deletingMessageId !== null
+                      }
+                      onClick={() => onDeleteMessage(message._id)}
+                    >
+                      <RiDeleteBinLine aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
               </div>
             </article>

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   RiMore2Line,
   RiUserFollowLine,
@@ -9,12 +9,15 @@ import {
 import { fetchPublicUserProfile } from '../services/users.api';
 import { useSocial } from '../social/useSocial';
 import Avatar from '../components/Avatar';
+import FollowerListDialog from '../components/FollowerListDialog';
 import PostFeed from '../components/PostFeed';
 import style from './Social.module.scss';
 
 export default function PublicProfilePage() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openPostId = searchParams.get('post');
   const {
     profile,
     blockedUserIds,
@@ -27,7 +30,15 @@ export default function PublicProfilePage() {
   const [loadedUserId, setLoadedUserId] = useState(null);
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [followList, setFollowList] = useState(null);
   const loading = String(loadedUserId) !== String(userId);
+  const handlePostRequestHandled = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('post');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useEffect(() => {
     if (
@@ -101,6 +112,12 @@ export default function PublicProfilePage() {
       ...current,
       isFollowing: result.following,
       hasRequestedFollow: result.requested,
+      followersCount: Math.max(
+        0,
+        (current.followersCount ?? 0)
+          + Number(Boolean(result.following))
+          - Number(Boolean(current.isFollowing))
+      ),
     }));
     if (profileData?.isPrivate && !result.following) setPosts([]);
   };
@@ -195,15 +212,53 @@ export default function PublicProfilePage() {
               They need to follow you back before you can chat.
             </p>
           )}
-          <p className={style.postCount}>
-            <strong>{posts.length}</strong> {posts.length === 1 ? 'post' : 'posts'}
-          </p>
+          {!isBlocked && (
+            <div className={style.profileStats}>
+              <div className={style.profileStat}>
+                <strong>{profileData.postsCount ?? posts.length}</strong>
+                <span>posts</span>
+              </div>
+              <button
+                type="button"
+                className={style.profileStat}
+                disabled={profileData.isPrivate && !isFollowing}
+                onClick={() => setFollowList('followers')}
+              >
+                <strong>{profileData.followersCount ?? 0}</strong>
+                <span>followers</span>
+              </button>
+              <button
+                type="button"
+                className={style.profileStat}
+                disabled={profileData.isPrivate && !isFollowing}
+                onClick={() => setFollowList('following')}
+              >
+                <strong>{profileData.followingCount ?? 0}</strong>
+                <span>following</span>
+              </button>
+            </div>
+          )}
         </div>
         <h2 className={style.postsHeading}>Posts</h2>
         {profileData.isPrivate && !isFollowing
           ? <p className={style.profilePrivacy}>Posts are visible after your follow request is approved.</p>
-          : <PostFeed posts={posts} setPosts={setPosts} />}
+          : (
+            <PostFeed
+              posts={posts}
+              setPosts={setPosts}
+              openPostId={openPostId}
+              onPostRequestHandled={handlePostRequestHandled}
+            />
+          )}
       </section>
+      {followList && (
+        <FollowerListDialog
+          userId={targetUserId}
+          username={profileData.username}
+          relation={followList}
+          onClose={() => setFollowList(null)}
+        />
+      )}
     </>
   );
 }

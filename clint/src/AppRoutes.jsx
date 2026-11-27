@@ -4,6 +4,7 @@ import Register from './features/auth/pages/Register';
 import ChatPage from './features/pages/Chat.page';
 import ExplorePage from './features/pages/Explore.page';
 import HomePage from './features/pages/Home.page';
+import NotificationsPage from './features/pages/Notifications.page';
 import ProfilePage from './features/pages/Profile.page';
 import PublicProfilePage from './features/pages/PublicProfile.page';
 import SettingsPage from './features/pages/Settings.page';
@@ -18,6 +19,7 @@ function AppRoutes() {
             <Route path="/" element={<HomePage />} />
             <Route path="/home" element={<HomePage />} />
             <Route path="/explore" element={<ExplorePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/chats" element={<ChatPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/users/:userId" element={<PublicProfilePage />} />
