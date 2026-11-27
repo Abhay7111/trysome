@@ -3,6 +3,7 @@ const express = require('express');
 const app = express()
 const cors = require('cors')
 const cookieParser = require('cookie-parser')
+const corsOrigin = require('./config/cors.config')
 
 const AuthRoute = require('./routes/auth.route')
 const PublicRoute = require('./routes/PublicData.route')
@@ -13,7 +14,7 @@ const ChatRoute = require('./routes/chat.route')
 app.use(express.json())
 app.use(cookieParser())
 app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173' || 'https://abhay7111-api-testing.netlify.app/',
+    origin: corsOrigin,
     credentials: true
 }))
 app.use('/api/auth', AuthRoute)

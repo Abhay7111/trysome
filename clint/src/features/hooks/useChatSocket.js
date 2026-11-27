@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
+import { API_ORIGIN } from '../services/api.config';
 
 export default function useChatSocket() {
   const [socket, setSocket] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const connection = io('http://localhost:3000', {
+    const connection = io(API_ORIGIN, {
       withCredentials: true,
       autoConnect: true,
     });

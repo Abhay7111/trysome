@@ -5,6 +5,16 @@ const uploadImage = require('../services/imagekit.service');
 
 const expireTime = `${2}Day`
 
+function getAuthCookieOptions(req) {
+    const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0].trim();
+    const isSecure = req.secure || forwardedProto === 'https';
+    return {
+        httpOnly: true,
+        secure: isSecure,
+        sameSite: isSecure ? 'none' : 'lax'
+    };
+}
+
 async function UserRegister(req, res) {
     const {username, password, email, profile_img} = req.body;
 
@@ -38,7 +48,7 @@ async function UserRegister(req, res) {
     process.env.JWT_SCRET,
     {expiresIn: expireTime})
 
-    res.cookie("token", token)
+    res.cookie("token", token, getAuthCookieOptions(req))
 
     res.status(201).json({
         message: "user register successfully",
@@ -77,7 +87,7 @@ async function UserLogin(req, res) {
     process.env.JWT_SCRET,
     {expiresIn: expireTime})
 
-    res.cookie("token", token)
+    res.cookie("token", token, getAuthCookieOptions(req))
 
     res.status(200).json({
         message: "successfully loggedin",
@@ -191,7 +201,7 @@ async function UpdateProfilePrivacy(req, res) {
 }
 
 function Logout(req, res) {
-    res.clearCookie('token');
+    res.clearCookie('token', getAuthCookieOptions(req));
     return res.status(200).json({ message: "Logged out successfully" });
 }
 
