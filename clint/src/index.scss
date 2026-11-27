@@ -1,10 +1,18 @@
 @use './shared/style/mixin.scss' as *;
+@use './shared/style/theme.scss';
 
 *{
     padding: 0px;
     margin: 0px;
     box-sizing: border-box;
     font-family: poppins;
+    transition: background-color 250ms ease-in, color 250ms ease-in, border-color 250ms ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition-duration: 0.01ms;
+    }
 }
 
 html, body, #root {
@@ -13,4 +21,8 @@ html, body, #root {
     @include bg-color();
     @include text-color();
     font-size: 16px;
+}
+
+::-webkit-scrollbar {
+    scrollbar-width: none;
 }

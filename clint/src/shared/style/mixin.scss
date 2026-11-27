@@ -1,12 +1,12 @@
-@mixin bg-color($bg-color: #1A1A19){
-    background-color: $bg-color ;
+@mixin bg-color($bg-color: var(--bg-surface)){
+    background-color: $bg-color;
 }
 
-@mixin text-color($t-color: white){
+@mixin text-color($t-color: var(--text-primary)){
     color: $t-color;
 }
 
-@mixin border-color($border: #2C2C2C){
+@mixin border-color($border: var(--border-color)){
     border-color: $border;
 }
 

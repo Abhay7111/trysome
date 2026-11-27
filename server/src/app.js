@@ -7,6 +7,8 @@ const cookieParser = require('cookie-parser')
 const AuthRoute = require('./routes/auth.route')
 const PublicRoute = require('./routes/PublicData.route')
 const PostRoute = require('./routes/post.route')
+const UserRoute = require('./routes/user.route')
+const ChatRoute = require('./routes/chat.route')
 
 app.use(express.json())
 app.use(cookieParser())
@@ -17,6 +19,8 @@ app.use(cors({
 app.use('/api/auth', AuthRoute)
 app.use('/api', PublicRoute)
 app.use('/api/post', PostRoute)
+app.use('/api/users', UserRoute)
+app.use('/api/chat', ChatRoute)
 
 app.get('/', (req, res) => {
     res.send("server is running")

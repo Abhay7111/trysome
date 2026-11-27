@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Public as fetchPublicPosts } from "../../features/services/public.api";
 import style from "../style/publicPost.module.scss";
 
@@ -26,7 +26,6 @@ const Public_component = () => {
             <p>{postItem.caption}</p>
             <img src={postItem.post_url} alt="" />
           </div>
-          <div className={style.buttons}></div>
         </div>
       ))}
     </div>

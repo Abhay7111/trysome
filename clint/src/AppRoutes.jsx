@@ -1,54 +1,31 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Link, Routes, Route } from 'react-router';
-import { getMe } from './features/auth/services/auth.api';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import Login from './features/auth/pages/Login';
 import Register from './features/auth/pages/Register';
-import Public from './features/pages/Public';
-
-function Home() {
-  const [profile, setProfile] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    getMe()
-      .then(setProfile)
-      .catch((requestError) => {
-        setError(
-          requestError.response?.data?.error ??
-            requestError.response?.data?.message ??
-            requestError.message
-        );
-      });
-  }, []);
-
-  if (error) {
-    return (
-      <main>
-        <p>{error}</p>
-        <Link to="/login">Log in</Link>
-      </main>
-    );
-  }
-
-  if (!profile) {
-    return <p>Loading profile...</p>;
-  }
-
-  return (
-    <main>
-      <h1>Welcome, {profile.username}</h1>
-      <p>{profile.email}</p>
-    </main>
-  );
-}
+import ChatPage from './features/pages/Chat.page';
+import ExplorePage from './features/pages/Explore.page';
+import HomePage from './features/pages/Home.page';
+import ProfilePage from './features/pages/Profile.page';
+import PublicProfilePage from './features/pages/PublicProfile.page';
+import SettingsPage from './features/pages/Settings.page';
+import SocialLayout from './features/components/SocialLayout';
+import { SocialProvider } from './features/social/SocialContext';
 
 function AppRoutes() {
   return (
     <BrowserRouter>
         <Routes>
-            <Route path='/' element={<Public />} />
-            <Route path='/login' element={<Login/>} />
-            <Route path='/register' element={<Register/>} />
+          <Route element={<SocialProvider><SocialLayout /></SocialProvider>}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/home" element={<HomePage />} />
+            <Route path="/explore" element={<ExplorePage />} />
+            <Route path="/chats" element={<ChatPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/users/:userId" element={<PublicProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
     </BrowserRouter>
   )

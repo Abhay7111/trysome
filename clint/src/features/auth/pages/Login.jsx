@@ -16,7 +16,7 @@ const Login = () => {
     setServerMessage("");
     try {
       await handelLogin(username, password);
-      navigate("/");
+      navigate("/home");
     } catch (error) {
       setServerMessage(
         error.response?.data?.message || "Unable to log in. Please try again."

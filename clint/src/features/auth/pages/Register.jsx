@@ -17,7 +17,7 @@ const Register = () => {
     setServerMessage("");
     try {
       await handelRegister(username, email, password);
-      navigate("/");
+      navigate("/home");
     } catch (error) {
       setServerMessage(
         error?.response?.data?.message ||
